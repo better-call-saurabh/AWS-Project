@@ -10,7 +10,7 @@ pipeline {
 
         stage('Clone Repository') {
             steps {
-                // Using GitHub PAT stored as username/password in Jenkins
+                // GitHub PAT stored as username/password
                 withCredentials([usernamePassword(
                     credentialsId: 'github-pat',
                     usernameVariable: 'GITHUB_USER',
@@ -32,11 +32,12 @@ pipeline {
                 '''
             }
         }
-        stage('Push Image to Docker Hub', id: 'docker') {
+
+        stage('Push Image to Docker Hub') {
             steps {
-                // Using DockerHub credentials stored in Jenkins
+                // DockerHub credentials
                 withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
+                    credentialsId: 'docker',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
