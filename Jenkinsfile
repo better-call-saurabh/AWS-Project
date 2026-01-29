@@ -2,49 +2,65 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "better0call/flask-app"
-        CONTAINER_NAME = "flask-app-container"
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub_credentials') // Docker Hub creds in Jenkins
+        IMAGE_NAME = "better0call/flask-app:latest"
+        CONTAINER_NAME = "flask-app"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
-                git url: 'https://github.com/better-call-saurabh/flask-app.git', branch: 'main'
+                // Using GitHub PAT stored as username/password in Jenkins
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-pat',
+                    usernameVariable: 'GITHUB_USER',
+                    passwordVariable: 'GITHUB_TOKEN'
+                )]) {
+                    sh '''
+                    rm -rf app
+                    git clone https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/better-call-saurabh/AWS-Project.git app
+                    '''
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t $IMAGE_NAME:latest ."
+                sh '''
+                cd app
+                docker build -t $IMAGE_NAME .
+                '''
+            }
+        }
+        stage('Push Image to Docker Hub', id: 'docker') {
+            steps {
+                // Using DockerHub credentials stored in Jenkins
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker push $IMAGE_NAME
+                    '''
+                }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Delete Old Container') {
             steps {
-                sh """
-                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                docker push $IMAGE_NAME:latest
-                """
-            }
-        }
-
-        stage('Delete old Container') {
-            steps {
-                sh """
-                # Stop and remove existing container if it exists
+                sh '''
                 docker rm -f $CONTAINER_NAME || true
-                """
+                '''
             }
         }
 
         stage('Deploy Container') {
             steps {
-                sh """
-                # Run the new container
-                docker run -d --name $CONTAINER_NAME -p 5000:5000 $IMAGE_NAME:latest
-                """
+                sh '''
+                docker run -d --name $CONTAINER_NAME -p 5000:5000 $IMAGE_NAME
+                '''
             }
         }
 
@@ -52,7 +68,7 @@ pipeline {
 
     post {
         always {
-            echo 'CI/CD pipeline completed!'
+            echo 'Pipeline finished!'
         }
     }
 }
